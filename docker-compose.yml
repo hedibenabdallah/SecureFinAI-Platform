@@ -1,49 +1,19 @@
-name: securefinai
-
 services:
   api:
-    image: python:3.11-slim
-    container_name: securefinai-api
-    restart: unless-stopped
-    working_dir: /app
-    volumes:
-      - .:/app
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-securefinai}:${POSTGRES_PASSWORD:-securefinai}@postgres:5432/${POSTGRES_DB:-securefinai}
-      QDRANT_URL: http://qdrant:6333
-      REDIS_URL: redis://redis:6379/0
-    command: >
-      sh -c "pip install --no-cache-dir -r requirements.txt &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - .:/app
     depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\"",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-    networks:
-      - securefinai-network
+      - postgres
+      - qdrant
+      - redis
 
   postgres:
     image: postgres:16-alpine
-    container_name: securefinai-postgres
-    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-securefinai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securefinai}
@@ -53,45 +23,20 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-securefinai} -d ${POSTGRES_DB:-securefinai}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U securefinai"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - securefinai-network
+      retries: 3
 
   qdrant:
     image: qdrant/qdrant:v1.12.5
-    container_name: securefinai-qdrant
-    restart: unless-stopped
     volumes:
       - qdrant_data:/qdrant/storage
     ports:
       - "6333:6333"
-      - "6334:6334"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "wget --no-verbose --tries=1 --spider http://localhost:6333/readyz || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-    networks:
-      - securefinai-network
 
   redis:
     image: redis:7-alpine
-    container_name: securefinai-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     ports:
@@ -99,21 +44,10 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    networks:
-      - securefinai-network
+      timeout: 3s
+      retries: 3
 
 volumes:
   postgres_data:
-    name: securefinai_postgres_data
   qdrant_data:
-    name: securefinai_qdrant_data
   redis_data:
-    name: securefinai_redis_data
-
-networks:
-  securefinai-network:
-    name: securefinai-network
-    driver: bridge
