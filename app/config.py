@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     )
     qdrant_url: str = "http://localhost:6333"
     redis_url: str = "redis://localhost:6379/0"
+    cache_similarity_threshold: float = 0.85
 
 
 settings = Settings()
